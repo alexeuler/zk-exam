@@ -29,6 +29,9 @@ impl Ring for SmallRing {
             value,
         }
     }
+    fn module(&self) -> &Self::Module {
+        &self.module
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,23 +135,25 @@ impl RingElement for SmallRingElement {
     }
 }
 
-struct ExtendedEuclideanView {
+#[derive(Debug, Clone)]
+pub struct ExtendedEuclideanView {
     /// x = y * m + r
     down: Vec<[i64; 4]>,
     /// x * n + y * m
     up: Vec<[i64; 4]>,
 }
 
-fn extended_euclidean(x: i64, y: i64) -> Result<(i64, i64, ExtendedEuclideanView), i64> {
+pub fn extended_euclidean(x: i64, y: i64) -> Result<(i64, i64, ExtendedEuclideanView), i64> {
     let x = x.abs();
     let y = y.abs();
-    let (mut x, mut y) = if x >= y { (x, y) } else { (y, x) };
+    let swapped = x < y;
+    let (x, y) = if swapped { (x, y) } else { (y, x) };
     if y < 2 {
         return Err(y);
     }
 
     let mut down: Vec<[i64; 4]> = vec![];
-    let mut up: Vec<[i64; 4]> = vec![];
+    // x = ya + r
     let mut current_row = [x, y, 0, 0];
     while current_row[1] > 1 {
         current_row[2] = current_row[0] / current_row[1];
@@ -162,16 +167,32 @@ fn extended_euclidean(x: i64, y: i64) -> Result<(i64, i64, ExtendedEuclideanView
         return Err(current_row[0]);
     }
 
+    // We have last row in `down` x = ya + r, r = 1
     let last_step = down.last().expect("Infallible");
 
-    current_row = [last_step[0], -1, last_step[1], last_step[2]];
-    let pair = (x, y);
-    let mut r = x.inject(1);
-    for (y, d) in steps.into_iter().rev() {
-        let x = y * d + r;
+    let mut up: Vec<[i64; 4]> = vec![];
+    // xa + yb = 1
+    current_row = [last_step[0], 1, last_step[1], -last_step[2]];
+    up.push(current_row);
+    for [z, _, d, _] in down.iter().rev().skip(1) {
+        // z = xd + y
+        // xa + yb = 1
+        // zb + x(a-bd) = 1
+        current_row = [
+            *z,
+            current_row[3],
+            current_row[0],
+            current_row[1] - current_row[3] * d,
+        ];
+        up.push(current_row);
     }
-    // r = x - y * d
-    todo!()
+    let view = ExtendedEuclideanView { down, up };
+    let (a, b) = if swapped {
+        (current_row[1], current_row[3])
+    } else {
+        (current_row[3], current_row[1])
+    };
+    Ok((a, b, view))
 }
 
 pub trait Ring: std::fmt::Debug + Clone + Send + Sync + 'static {
