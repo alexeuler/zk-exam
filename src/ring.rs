@@ -133,6 +133,17 @@ impl RingElement for SmallRingElement {
     fn ring(&self) -> &impl Ring {
         &self.ring
     }
+    fn inverse(&self) -> Option<Self> {
+        let inv_value = extended_euclidean(self.value as i64, self.ring.module as i64)
+            .ok()?
+            .0;
+        let mut modular_value = inv_value % self.ring.module as i64;
+        if modular_value < 0 {
+            modular_value += self.ring.module as i64;
+        }
+        let inv_elem = self.ring.create_element(modular_value as u64);
+        Some(inv_elem)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -222,4 +233,5 @@ pub trait RingElement:
     + 'static
 {
     fn ring(&self) -> &impl Ring;
+    fn inverse(&self) -> Option<Self>;
 }
